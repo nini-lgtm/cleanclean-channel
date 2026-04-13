@@ -471,7 +471,7 @@ return(<div style={{minHeight:'100vh'}}>
 {tab===0&&<T1 products={products} sP={sP}/>}
 {tab===1&&<T2 combos={combos} sC={sC} products={products}/>}
 {tab===2&&<T3 products={products} combos={combos} clients={clients} sCl={sCl} events={events} sE={sE}/>}
-{tab===3&&<T4 products={products} combos={combos} events={events}/>}
+{tab===3&&<T4 products={products} combos={combos} events={events} clients={clients}/>}
 {tab===4&&<T5 events={events} sE={sE} products={products} combos={combos}/>}
 </main>
 </div>);
@@ -488,6 +488,9 @@ return(<div className="mo" onClick={onClose}><div className="mc" style={{maxWidt
 /* ==================== 1. 產品主表 ==================== */
 function T1({products,sP}){
 const[s,setS]=useState('');const[cf,setCf]=useState('全部');const[eid,setEid]=useState(null);const[ed,setEd]=useState({});const[sa,setSa]=useState(false);
+const[tierView,setTierView]=useState('sp');
+const tierOpts=[{k:'dp',label:'經銷',bg:'#fff7ed',color:'#92400e'},{k:'cp',label:'特約',bg:'#e6f7fa',color:'#1a6a75'},{k:'sp',label:'特殊',bg:'#fef3c7',color:'#92400e'}];
+const curTier=tierOpts.find(t=>t.k===tierView);
 const cats=['全部',...new Set(products.map(p=>p.cat))];
 const fl=products.filter(p=>p.name.includes(s)&&(cf==='全部'||p.cat===cf));
 return(<div>
@@ -495,21 +498,22 @@ return(<div>
 <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
 <input type="text" placeholder="&#128269; 搜尋產品..." value={s} onChange={e=>setS(e.target.value)} style={{width:220}}/>
 <select value={cf} onChange={e=>setCf(e.target.value)} style={{minWidth:120}}>{cats.map(c=><option key={c}>{c}</option>)}</select>
+<div style={{display:'flex',gap:4,background:'#f1f5f9',borderRadius:8,padding:2}}>
+{tierOpts.map(t=><button key={t.k} onClick={()=>setTierView(t.k)} style={{padding:'5px 14px',borderRadius:6,border:'none',fontSize:13,fontWeight:tierView===t.k?600:400,cursor:'pointer',background:tierView===t.k?t.bg:'transparent',color:tierView===t.k?t.color:'#64748b'}}>{t.label}</button>)}
+</div>
 </div>
 <button className="bp" onClick={()=>setSa(true)}>+ 新增產品</button>
 </div>
 <div className="card" style={{overflow:'auto'}}><table><thead><tr>
-<th>分類</th><th>產品名稱</th><th>定價</th><th>零售價</th><th style={{background:'#fff7ed'}}>經銷價</th><th style={{background:'#e6f7fa'}}>特約價</th><th style={{background:'#fef3c7'}}>特殊價</th><th>成本</th><th>毛利率(特殊)</th><th>操作</th>
+<th>分類</th><th>產品名稱</th><th>定價</th><th>零售價</th><th style={{background:curTier.bg}}>{curTier.label}價</th><th>成本</th><th style={{background:curTier.bg}}>{curTier.label}毛利率</th><th>操作</th>
 </tr></thead><tbody>
-{fl.map(p=>{const mg=p.sp>0?(p.sp-p.cost)/p.sp:0;
+{fl.map(p=>{const price=p[tierView]||0;const mg=price>0?(price-p.cost)/price:0;
 if(eid===p.id)return(<tr key={p.id} style={{background:'#e6f7fa'}}>
 <td><input type="text" value={ed.cat} onChange={e=>setEd({...ed,cat:e.target.value})} style={{width:70}}/></td>
 <td><input type="text" value={ed.name} onChange={e=>setEd({...ed,name:e.target.value})} style={{width:180}}/></td>
 <td><input type="number" value={ed.retail} onChange={e=>setEd({...ed,retail:+e.target.value})} style={{width:70}}/></td>
 <td><input type="number" value={ed.rp} onChange={e=>setEd({...ed,rp:+e.target.value})} style={{width:70}}/></td>
-<td><input type="number" value={ed.dp} onChange={e=>setEd({...ed,dp:+e.target.value})} style={{width:70}}/></td>
-<td><input type="number" value={ed.cp} onChange={e=>setEd({...ed,cp:+e.target.value})} style={{width:70}}/></td>
-<td><input type="number" value={ed.sp} onChange={e=>setEd({...ed,sp:+e.target.value})} style={{width:70}}/></td>
+<td><input type="number" value={ed[tierView]} onChange={e=>setEd({...ed,[tierView]:+e.target.value})} style={{width:70}}/></td>
 <td><input type="number" step=".01" value={ed.cost} onChange={e=>setEd({...ed,cost:+e.target.value})} style={{width:70}}/></td>
 <td></td>
 <td><button className="bp" onClick={()=>{sP(products.map(x=>x.id===eid?{...ed}:x));setEid(null)}} style={{fontSize:12,padding:'4px 10px'}}>儲存</button></td>
@@ -519,11 +523,9 @@ return(<tr key={p.id}>
 <td style={{fontWeight:500}}>{p.name}</td>
 <td>${$(p.retail)}</td>
 <td>${$(p.rp||0)}</td>
-<td style={{background:'#fff7ed'}}>${$(p.dp||0)}</td>
-<td style={{background:'#e6f7fa'}}>${$(p.cp||0)}</td>
-<td style={{background:'#fef3c7',fontWeight:600}}>${$(p.sp||0)}</td>
+<td style={{background:curTier.bg,fontWeight:600}}>${$(price)}</td>
 <td>${$(p.cost)}</td>
-<td><span className={C(mg)}>{P(mg)}</span></td>
+<td style={{background:curTier.bg}}><span className={C(mg)}>{P(mg)}</span></td>
 <td style={{whiteSpace:'nowrap'}}>
 <button className="bs" onClick={()=>{setEid(p.id);setEd({...p})}} style={{fontSize:12,padding:'4px 10px',marginRight:4}}>編輯</button>
 <button className="bd" onClick={()=>{if(confirm('確定？'))sP(products.filter(x=>x.id!==p.id))}} style={{fontSize:12}}>刪除</button>
@@ -715,7 +717,7 @@ const saveEv=()=>{
   if(!eName){alert('請輸入場次名稱');return}
   const d=eDate?new Date(eDate):new Date();
   const totalShip=shipMode==='lump'?shipLump:sum.shipT;
-  const ev={id:Date.now(),name:eName,client:cl?.name||'',commission:comm,
+  const ev={id:Date.now(),name:eName,client:cl?.name||'',commission:comm,tier:cl?.tier||'cp',
     date:eDate,year:d.getFullYear(),month:d.getMonth()+1,
     totalRevenue:sum.rev,totalCost:sum.totalCostAll,totalProfit:sum.profit,totalMargin:sum.margin,
     shipping:totalShip,shipMode,
@@ -842,7 +844,7 @@ return(<div>
 }
 
 /* ==================== 4. 數據分析（四合一）==================== */
-function T4({products,combos,events}){
+function T4({products,combos,events,clients}){
 const[sub,setSub]=useState(0);
 const subs=['數據總覽','廠商業績','定價模擬'];
 
@@ -930,10 +932,14 @@ function ViewDashboard(){
 function ViewVendorPerf(){
   const[vF,setVF]=useState('全部');
   const[vyF,setVyF]=useState('全部');const[vmF,setVmF]=useState('全部');
+  const[vtF,setVtF]=useState('all');
+  const tierMap={'dp':'經銷','cp':'特約','sp':'特殊'};
   const allYears=['全部',...new Set(events.map(e=>e.year).filter(Boolean))];
   const allMonths=['全部',...[...new Set(events.map(e=>e.month).filter(Boolean))].sort((a,b)=>a-b)];
-  // 先按年月篩選
-  const fEv=events.filter(e=>(vyF==='全部'||e.year===+vyF)&&(vmF==='全部'||e.month===+vmF));
+  // 查找事件的 tier（優先用事件上的，否則從 clients 查）
+  const evTier=e=>{if(e.tier)return e.tier;const c=(clients||[]).find(c=>c.name===e.client);return c?.tier||'cp';};
+  // 先按年月+類型篩選
+  const fEv=events.filter(e=>(vyF==='全部'||e.year===+vyF)&&(vmF==='全部'||e.month===+vmF)&&(vtF==='all'||evTier(e)===vtF));
   const byClient={};fEv.forEach(e=>{const k=e.client||'未知';if(!byClient[k])byClient[k]={rev:0,profit:0,cost:0,count:0,comm:0,events:[]};
     byClient[k].rev+=e.totalRevenue;byClient[k].profit+=e.totalProfit;byClient[k].cost+=e.totalCost;byClient[k].count++;byClient[k].comm=e.commission||byClient[k].comm;byClient[k].events.push(e)});
   const allNames=['全部',...Object.keys(byClient).sort()];
@@ -950,6 +956,9 @@ function ViewVendorPerf(){
   {allYears.map(y=><option key={y} value={y}>{y==='全部'?'全部年度':y+'年'}</option>)}</select></F>
   <F l="月份"><select value={vmF} onChange={e=>setVmF(e.target.value)} style={{minWidth:100}}>
   {allMonths.map(m=><option key={m} value={m}>{m==='全部'?'全部月份':m+'月'}</option>)}</select></F>
+  <F l="類型"><select value={vtF} onChange={e=>setVtF(e.target.value)} style={{minWidth:100}}>
+  <option value="all">全部類型</option><option value="dp">經銷</option><option value="cp">特約</option><option value="sp">特殊</option>
+  </select></F>
   <F l="廠商"><select value={vF} onChange={e=>setVF(e.target.value)} style={{minWidth:160}}>
   {allNames.map(n=><option key={n} value={n}>{n==='全部'?'全部廠商 ('+Object.keys(byClient).length+')':n}</option>)}
   </select></F>
@@ -969,7 +978,7 @@ function ViewVendorPerf(){
   {/* 明細表 */}
   {arr.map(([name,v])=><div key={name} className="card" style={{padding:20,marginBottom:16}}>
   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-  <h3 style={{fontSize:16,fontWeight:600}}>{name} <span style={{fontSize:13,color:'#64748b',fontWeight:400}}>· {v.count}場 {v.comm>0?`· 分潤${(v.comm*100).toFixed(0)}%`:''}</span></h3>
+  <h3 style={{fontSize:16,fontWeight:600}}>{name} {(()=>{const t=evTier(v.events[0]);return t?<span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:t==='dp'?'#fff7ed':t==='sp'?'#fef3c7':'#e6f7fa',color:t==='dp'?'#92400e':t==='sp'?'#92400e':'#1a6a75',marginLeft:4}}>{tierMap[t]||t}</span>:null})()} <span style={{fontSize:13,color:'#64748b',fontWeight:400}}>· {v.count}場 {v.comm>0?`· 分潤${(v.comm*100).toFixed(0)}%`:''}</span></h3>
   <div style={{display:'flex',gap:16,fontSize:13}}>
   <span>營業額 <b>${$(v.rev)}</b></span>
   <span>利潤 <b style={{color:v.profit>=0?'#059669':'#dc2626'}}>${$(v.profit)}</b></span>
