@@ -224,13 +224,24 @@ const C=r=>!isFinite(r)||isNaN(r)?'':r>=.35?'ph':r>=.2?'pm':'pl';
 
 /* ===== 資料持久化（外部檔案 + localStorage 雙備份）===== */
 const SK='jj_quote_data_v3';
-// 讀取優先順序：localStorage → 外部 JJ_DATA → 預設值
+// 比較 savedAt，data.js 較新就用 data.js（並同步更新 localStorage）
+const _useFile=(function(){
+  try{
+    const s=localStorage.getItem(SK);
+    const lsTime=s?JSON.parse(s).savedAt||'':'';
+    const fjTime=window.JJ_DATA?window.JJ_DATA.savedAt||'':'';
+    if(fjTime && (!lsTime || fjTime>lsTime)){
+      // data.js 比 localStorage 新，同步寫入 localStorage
+      localStorage.setItem(SK,JSON.stringify(window.JJ_DATA));
+      return true;
+    }
+    return false;
+  }catch(e){return false}
+})();
 function LD(k,d){
   try{
-    // 先試 localStorage
     const s=localStorage.getItem(SK);
     if(s){const o=JSON.parse(s);if(o[k]!==undefined && (Array.isArray(o[k])?o[k].length>0:true))return o[k]}
-    // 再試外部資料檔
     if(window.JJ_DATA && window.JJ_DATA[k] && (Array.isArray(window.JJ_DATA[k])?window.JJ_DATA[k].length>0:true))return window.JJ_DATA[k];
     return d;
   }catch(e){return d}
