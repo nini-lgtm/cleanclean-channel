@@ -241,7 +241,7 @@ window._dlXlsx=function(evList,fileName,mode){
 })();
 </script>
 <script type="text/babel">
-const{useState,useMemo,useEffect}=React;
+const{useState,useMemo,useEffect,useRef}=React;
 const $=n=>n==null||isNaN(n)?'-':Math.round(n).toLocaleString();
 const P=n=>n==null||isNaN(n)||!isFinite(n)?'-':(n*100).toFixed(1)+'%';
 const C=r=>!isFinite(r)||isNaN(r)?'':r>=.35?'ph':r>=.2?'pm':'pl';
@@ -271,6 +271,7 @@ function LD(k,d){
   }catch(e){return d}
 }
 function SV(k,v){try{const s=localStorage.getItem(SK);const o=s?JSON.parse(s):{};o[k]=v;localStorage.setItem(SK,JSON.stringify(o))}catch(e){}}
+function SV_ALL(data){try{localStorage.setItem(SK,JSON.stringify(data))}catch(e){}}
 // 標記是否有未儲存的變更
 let _unsaved=false;
 function markUnsaved(){_unsaved=true}
@@ -520,6 +521,68 @@ const saveToFile=async()=>{
     alert('資料已下載！\n\n⚠️ 自動部署失敗，請手動將 data.js 放到報價單資料夾，\n並執行「一鍵部署報價單.bat」更新網頁版。');
   }
 };
+/* ===== 自動儲存 + 雲端輪詢（近即時同步）===== */
+const[syncStatus,setSyncStatus]=useState('');
+const autoSaveTimer=useRef(null);
+
+// 靜默自動儲存（不跳密碼、不跳 alert）
+const autoSave=async()=>{
+  if(!_admin)return;// 尚未驗證管理員，略過
+  if(!getGHToken())return;// 沒 token 不做
+  try{
+    setSyncStatus('💾 自動儲存中...');
+    const cloud=await fetchCloudData();
+    const local={p:products,c:combos,cl:clients,ev:events};
+    const merged=mergeData(local,cloud);
+    // 若雲端有新資料，也同步到當前 state
+    if(cloud){
+      if((merged.ev||[]).length>(events||[]).length)_sE(merged.ev);
+      if((merged.cl||[]).length>(clients||[]).length)_sCl(merged.cl);
+    }
+    const data={p:merged.p,c:merged.c,cl:merged.cl,ev:merged.ev,savedAt:new Date().toISOString()};
+    const content='// 淨淨報價系統 - 資料儲存檔\n// 自動儲存於 '+new Date().toLocaleString('zh-TW')+'\nwindow.JJ_DATA = '+JSON.stringify(data,null,2)+';\n';
+    SV_ALL(data);// 同步寫回 localStorage
+    await saveToGitHub(content);
+    _unsaved=false;setSaved(true);
+    setSyncStatus('✅ 已自動儲存 '+new Date().toLocaleTimeString('zh-TW').slice(0,5));
+    setTimeout(()=>setSyncStatus(s=>s.startsWith('✅')?'':s),5000);
+  }catch(e){
+    setSyncStatus('⚠️ 自動儲存失敗');
+    console.warn('autoSave',e);
+  }
+};
+
+// 監聽資料變動，30 秒 debounce 後自動儲存
+useEffect(()=>{
+  if(!_unsaved)return;
+  if(autoSaveTimer.current)clearTimeout(autoSaveTimer.current);
+  setSyncStatus('📝 待自動儲存（30 秒後）');
+  autoSaveTimer.current=setTimeout(autoSave,30000);
+  return()=>{if(autoSaveTimer.current)clearTimeout(autoSaveTimer.current)};
+},[products,combos,clients,events]);
+
+// 每 10 秒從雲端抓最新資料，若比本機新則同步更新
+useEffect(()=>{
+  const id=setInterval(async()=>{
+    if(_unsaved)return;// 使用者正在編輯中，跳過
+    try{
+      const cloud=await fetchCloudData();
+      if(!cloud||!cloud.savedAt)return;
+      const localRaw=localStorage.getItem(SK);
+      const localObj=localRaw?JSON.parse(localRaw):{};
+      const localTime=localObj.savedAt||'';
+      if(cloud.savedAt<=localTime)return;// 本機已是最新
+      // 套用雲端資料
+      _sP(cloud.p||[]);_sC(cloud.c||[]);
+      _sCl(cloud.cl||[]);_sE(cloud.ev||[]);
+      localStorage.setItem(SK,JSON.stringify(cloud));
+      setSyncStatus('🔄 已同步同仁更新 '+new Date().toLocaleTimeString('zh-TW').slice(0,5));
+      setTimeout(()=>setSyncStatus(s=>s.startsWith('🔄')?'':s),5000);
+    }catch(e){}
+  },10000);
+  return()=>clearInterval(id);
+},[]);
+
 /* 匯出 JSON 備份 */
 const exportData=()=>{
   const data={p:products,c:combos,cl:clients,ev:events,exportDate:new Date().toISOString()};
@@ -557,6 +620,7 @@ return(<div style={{minHeight:'100vh'}}>
 <div style={{display:'flex',gap:8,alignItems:'center'}}>
 {!saved&&<span style={{background:'#fbbf24',color:'#78350f',padding:'4px 10px',borderRadius:6,fontSize:12,fontWeight:600,animation:'pulse 2s infinite'}}>有未儲存的變更</span>}
 <button onClick={syncFromCloud} style={{background:'#0ea5e9',color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontSize:13,fontWeight:600}}>&#9729;&#65039; 從雲端同步</button>
+{syncStatus&&<span style={{fontSize:12,color:'#64748b',marginRight:8,padding:'4px 10px',background:'#f1f5f9',borderRadius:12}}>{syncStatus}</span>}
 <button onClick={saveToFile} style={{background:'#10b981',color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontSize:13,fontWeight:600}}>&#128190; 儲存資料</button>
 <button onClick={importData} style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'6px 14px',cursor:'pointer',fontSize:13}}>&#128194; 匯入資料</button>
 </div>
