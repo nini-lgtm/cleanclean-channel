@@ -399,7 +399,12 @@ const CL0=[
 {id:2,name:'Mei姊',commission:.32,note:'32%分潤'},
 ];
 
-const TABS=['🌟 客戶儀表板','👥 客戶主檔','📦 產品主檔','📊 銷售分析','產品主表','組合設定','報價試算','數據分析','場次總表'];
+// 兩層導覽：群組 → 分頁
+const GROUPS=[
+  {k:'manage',label:'📊 經營管理',tabs:['客戶儀表板','客戶主檔','產品主檔','銷售分析']},
+  {k:'quote',label:'💰 報價系統',tabs:['報價試算','場次總表','產品定價','組合設定','數據分析']},
+];
+const TABS=['客戶儀表板','客戶主檔','產品主檔','銷售分析','報價試算','場次總表','產品定價','組合設定','數據分析'];
 
 function App(){
 const[tab,setTab]=useState(0);
@@ -525,6 +530,7 @@ const saveToFile=async()=>{
 };
 /* ===== 自動儲存 + 雲端輪詢（近即時同步）===== */
 const[syncStatus,setSyncStatus]=useState('');
+const[menuOpen,setMenuOpen]=useState(false);
 const autoSaveTimer=useRef(null);
 
 // 靜默自動儲存（不跳密碼、不跳 alert）
@@ -661,16 +667,36 @@ return(<div style={{minHeight:'100vh'}}>
 <p style={{fontSize:13,opacity:.8,margin:'4px 0 0'}}>產品管理 · 組合設定 · 廠商報價 · 毛利分析</p></div></div>
 <div style={{display:'flex',gap:8,alignItems:'center'}}>
 {!saved&&<span style={{background:'#fbbf24',color:'#78350f',padding:'4px 10px',borderRadius:6,fontSize:12,fontWeight:600,animation:'pulse 2s infinite'}}>有未儲存的變更</span>}
-<button onClick={syncFromCloud} style={{background:'#0ea5e9',color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontSize:13,fontWeight:600}}>&#9729;&#65039; 從雲端同步</button>
+<div style={{position:'relative'}}>
+<button onClick={()=>setMenuOpen(!menuOpen)} style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'8px 14px',cursor:'pointer',fontSize:13}}>&#9881;&#65039; 工具 &#9662;</button>
+{menuOpen&&<div style={{position:'absolute',right:0,top:'100%',marginTop:4,background:'#fff',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,.15)',minWidth:180,zIndex:100,overflow:'hidden'}}>
+  <div onClick={()=>{setMenuOpen(false);syncFromCloud()}} style={{padding:'10px 14px',cursor:'pointer',fontSize:13,color:'#334155',borderBottom:'1px solid #f1f5f9'}}>&#9729;&#65039; 從雲端同步</div>
+  <div onClick={()=>{setMenuOpen(false);backupZip()}} style={{padding:'10px 14px',cursor:'pointer',fontSize:13,color:'#334155',borderBottom:'1px solid #f1f5f9'}}>&#128230; 下載 ZIP 備份</div>
+  <div onClick={()=>{setMenuOpen(false);restoreZip()}} style={{padding:'10px 14px',cursor:'pointer',fontSize:13,color:'#334155',borderBottom:'1px solid #f1f5f9'}}>&#128228; 從 ZIP 還原</div>
+  <div onClick={()=>{setMenuOpen(false);exportData()}} style={{padding:'10px 14px',cursor:'pointer',fontSize:13,color:'#334155',borderBottom:'1px solid #f1f5f9'}}>&#128196; 匯出 JSON</div>
+  <div onClick={()=>{setMenuOpen(false);importData()}} style={{padding:'10px 14px',cursor:'pointer',fontSize:13,color:'#334155'}}>&#128194; 匯入資料</div>
+</div>}
+</div>
 {syncStatus&&<span style={{fontSize:12,color:'#64748b',marginRight:8,padding:'4px 10px',background:'#f1f5f9',borderRadius:12}}>{syncStatus}</span>}
 <button onClick={saveToFile} style={{background:'#10b981',color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontSize:13,fontWeight:600}}>&#128190; 儲存資料</button>
-<button onClick={backupZip} style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'6px 14px',cursor:'pointer',fontSize:13}}>&#128230; ZIP 備份</button>
-<button onClick={restoreZip} style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'6px 14px',cursor:'pointer',fontSize:13}}>&#128228; ZIP 還原</button>
-<button onClick={importData} style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'6px 14px',cursor:'pointer',fontSize:13}}>&#128194; 匯入資料</button>
 </div>
 </div></header>
-<nav style={{display:'flex',gap:4,padding:'12px 24px',background:'#fff',borderBottom:'1px solid #e2e8f0',flexWrap:'wrap'}}>
-{TABS.map((t,i)=><button key={i} onClick={()=>setTab(i)} className={tab===i?'ta':'ti'} style={{padding:'8px 18px',borderRadius:8,border:'none',cursor:'pointer',fontWeight:500,fontSize:14}}>{t}</button>)}
+<nav style={{background:'#fff',borderBottom:'1px solid #e2e8f0'}}>
+{/* 第一層：群組 */}
+<div style={{display:'flex',gap:4,padding:'10px 24px 0',flexWrap:'wrap'}}>
+{GROUPS.map(g=>{
+  const idxs=g.tabs.map(t=>TABS.indexOf(t));
+  const active=idxs.includes(tab);
+  return <button key={g.k} onClick={()=>setTab(idxs[0])} style={{padding:'10px 20px',borderRadius:'8px 8px 0 0',border:'none',cursor:'pointer',fontWeight:600,fontSize:15,background:active?'#1A6A75':'transparent',color:active?'#fff':'#64748b'}}>{g.label}</button>;
+})}
+</div>
+{/* 第二層：分頁 */}
+<div style={{display:'flex',gap:4,padding:'10px 24px',background:'#f8fafc',flexWrap:'wrap'}}>
+{(GROUPS.find(g=>g.tabs.map(t=>TABS.indexOf(t)).includes(tab))||GROUPS[0]).tabs.map(t=>{
+  const i=TABS.indexOf(t);
+  return <button key={i} onClick={()=>setTab(i)} className={tab===i?'ta':'ti'} style={{padding:'6px 16px',borderRadius:6,border:'none',cursor:'pointer',fontWeight:500,fontSize:13}}>{t}</button>;
+})}
+</div>
 </nav>
 <main style={{padding:'20px 24px',maxWidth:1500,margin:'0 auto'}}>
 {dataSource==='預設'&&events.length===0&&<div className="save-banner">
@@ -683,11 +709,11 @@ return(<div style={{minHeight:'100vh'}}>
 {tab===1&&<MasterClients/>}
 {tab===2&&<MasterProducts/>}
 {tab===3&&<SalesAnalytics/>}
-{tab===4&&<T1 products={products} sP={sP}/>}
-{tab===5&&<T2 combos={combos} sC={sC} products={products}/>}
-{tab===6&&<T3 products={products} combos={combos} clients={clients} sCl={sCl} events={events} sE={sE}/>}
-{tab===7&&<T4 products={products} combos={combos} events={events} clients={clients}/>}
-{tab===8&&<T5 events={events} sE={sE} products={products} combos={combos}/>}
+{tab===4&&<T3 products={products} combos={combos} clients={clients} sCl={sCl} events={events} sE={sE}/>}
+{tab===5&&<T5 events={events} sE={sE} products={products} combos={combos}/>}
+{tab===6&&<T1 products={products} sP={sP}/>}
+{tab===7&&<T2 combos={combos} sC={sC} products={products}/>}
+{tab===8&&<T4 products={products} combos={combos} events={events} clients={clients}/>}
 </main>
 </div>);
 }
