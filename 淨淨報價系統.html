@@ -726,6 +726,7 @@ const[rows,setRows]=useState([]);
 const[shipMode,setSM]=useState('lump');
 const[shipLump,setSL]=useState(0);
 const[shipPer,setSP]=useState(150);
+const[liveRate,setLiveRate]=useState(1);  // 直播價折數（1=不打折，0.8=八折）
 const[showAC,setSAC]=useState(false);
 const[tierF,setTierF]=useState('all');
 const[clQ,setClQ]=useState('');
@@ -766,8 +767,10 @@ const calcR=row=>{
     name=c.name;dCp=c[tier]||0;dRetail=c.retail||0;dLive=dRetail;
     c.items.forEach(it=>{const p=products.find(x=>x.id===it.pid);if(p){unitCost+=p.cost*it.qty;if(!dRetail)dLive+=p.retail*it.qty;if(!dCp)dCp+=(p[tier]||p.cp)*it.qty}});
   }
+  // 套用直播折數（四捨五入到整數元）
+  const dLiveDiscounted=Math.round(dLive*liveRate);
   const cp=row.ccp?row.cpo:dCp;
-  const lp=row.clp?row.lp:dLive;
+  const lp=row.clp?row.lp:dLiveDiscounted;
   const retail=dRetail||dLive;
   const totalCost=unitCost*row.qty;
   const perShip=shipMode==='perItem'?shipPer*row.qty:0;
@@ -777,7 +780,7 @@ const calcR=row=>{
   const commAmt=comm>0?netRevenue*comm:0;
   const netProfit=netRevenue-totalCost-commAmt-perShip;
   const netMargin=netRevenue>0?netProfit/netRevenue:0;
-  return{name,cp,dCp,lp,dLive,retail,vendorProfit,vendorMargin,netRevenue,totalCost,netProfit,netMargin,commAmt,perShip};
+  return{name,cp,dCp,lp,dLive:dLiveDiscounted,unitCost,retail,vendorProfit,vendorMargin,netRevenue,totalCost,netProfit,netMargin,commAmt,perShip};
 };
 
 const sum=useMemo(()=>{
@@ -786,13 +789,13 @@ const sum=useMemo(()=>{
   if(shipMode==='lump'){profit-=shipLump}
   const totalCostAll=cost+comT+(shipMode==='lump'?shipLump:shipT);
   return{rev,totalCostAll,profit,margin:rev>0?profit/rev:0,comT,shipT};
-},[rows,shipMode,shipLump,shipPer,cid,evComm]);
+},[rows,shipMode,shipLump,shipPer,cid,evComm,liveRate]);
 
 const saveEv=()=>{
   if(!eName){alert('請輸入場次名稱');return}
   const d=eDate?new Date(eDate):new Date();
   const totalShip=shipMode==='lump'?shipLump:sum.shipT;
-  const ev={id:Date.now(),name:eName,client:cl?.name||'',commission:comm,tier:cl?.tier||'cp',
+  const ev={id:Date.now(),name:eName,client:cl?.name||'',commission:comm,tier:cl?.tier||'cp',liveRate,
     date:eDate,year:d.getFullYear(),month:d.getMonth()+1,
     totalRevenue:sum.rev,totalCost:sum.totalCostAll,totalProfit:sum.profit,totalMargin:sum.margin,
     shipping:totalShip,shipMode,
@@ -808,7 +811,7 @@ const[showEC,setSEC]=useState(false);
 const[editClData,setECD]=useState(null);
 
 const hasComm=comm>0;
-const colSpan=hasComm?14:13;
+const colSpan=(hasComm?14:13)+1;  // +1 for 單位成本
 
 return(<div>
 <div className="card" style={{padding:20,marginBottom:16}}>
@@ -836,6 +839,20 @@ return(<div>
 {shipMode==='lump'?<F l="運費總額"><input type="number" value={shipLump} onChange={e=>setSL(+e.target.value)} style={{width:120}}/></F>
 :<F l="每品項運費"><input type="number" value={shipPer} onChange={e=>setSP(+e.target.value)} style={{width:100}}/></F>}
 {shipMode==='perItem'&&<div style={{fontSize:12,color:'#d97706',paddingBottom:6}}>* 每組加 ${shipPer}，結束後可在場次總表改為實際運費</div>}
+<F l="直播折數"><select value={liveRate} onChange={e=>setLiveRate(+e.target.value)} style={{minWidth:90}}>
+<option value={1}>不打折</option>
+<option value={0.95}>95折</option>
+<option value={0.9}>9折</option>
+<option value={0.85}>85折</option>
+<option value={0.8}>8折</option>
+<option value={0.75}>75折</option>
+<option value={0.7}>7折</option>
+<option value={0.65}>65折</option>
+<option value={0.6}>6折</option>
+<option value={0.55}>55折</option>
+<option value={0.5}>5折</option>
+</select></F>
+<div style={{fontSize:12,color:'#64748b',paddingBottom:6}}>直播價 = 官網價 × {liveRate}（可在表格中個別調整）</div>
 </div>
 {cl&&<div className="ib" style={{marginTop:12}}><b>{cl.name}</b><span style={{background:'#e6f7fa',color:'#1a6a75',padding:'2px 8px',borderRadius:4,fontSize:12,marginLeft:8}}>{tierLabel}</span>{hasComm&&<span> · 本場分潤 {(comm*100).toFixed(0)}%</span>}{cl.note&&<span style={{color:'#64748b'}}> · {cl.note}</span>}</div>}
 </div>
@@ -858,7 +875,7 @@ return(<div>
 <th>類型</th><th>品項</th><th>組數</th><th>官網價</th>
 <th className="eh">直播價 &#9998;</th><th className="eh">{tierLabel} &#9998;</th>
 <th>廠商利潤</th><th>廠商毛利</th>
-<th>淨淨營業額</th><th>淨淨成本</th>
+<th>淨淨營業額</th><th style={{color:'#64748b'}}>單位成本</th><th>淨淨成本</th>
 {hasComm&&<th>分潤</th>}
 {shipMode==='perItem'&&<th>運費</th>}
 <th>淨淨利潤</th><th>毛利率</th><th></th>
@@ -876,6 +893,7 @@ return(<div>
 <td style={{color:c.vendorProfit>=0?'#059669':'#dc2626'}}>${$(c.vendorProfit)}</td>
 <td><span className={C(c.vendorMargin)}>{P(c.vendorMargin)}</span></td>
 <td style={{fontWeight:500}}>${$(c.netRevenue)}</td>
+<td style={{color:'#64748b'}}>${$(c.unitCost)}</td>
 <td>${$(c.totalCost)}</td>
 {hasComm&&<td style={{color:'#d97706'}}>${$(c.commAmt)}</td>}
 {shipMode==='perItem'&&<td style={{color:'#92400e'}}>${$(c.perShip)}</td>}
