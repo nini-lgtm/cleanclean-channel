@@ -400,18 +400,19 @@ const syncFromCloud=async()=>{
 
 /* 儲存資料到外部檔案（data.js）- 支援直接覆蓋寫入 + GitHub 自動部署，需管理員權限 */
 const saveToFile=async()=>{
-  // 先在使用者點擊的同步階段取得檔案句柄（避免 user gesture 過期）
-  if(window.showOpenFilePicker && !_fileHandle){
+  // 只在本機檔案模式才跳出檔案選擇（網頁版跳過，直接推 GitHub）
+  const isLocal=location.protocol==='file:';
+  if(isLocal && window.showOpenFilePicker && !_fileHandle){
     try{
       alert('請選擇報價單資料夾中現有的「data.js」檔案，\n之後每次儲存都會自動覆蓋該檔案。');
       const [fh]=await window.showOpenFilePicker({types:[{description:'JavaScript',accept:{'application/javascript':['.js']}}]});
       _fileHandle=fh;
     }catch(e){
-      if(e.name==='AbortError')return;
-      console.warn('File System Access API 失敗，改用下載方式',e);
+      if(e.name!=='AbortError')console.warn('File System Access API 失敗',e);
+      // 即使取消檔案選擇，也繼續走 GitHub 儲存流程
     }
   }
-  // 取得檔案句柄後再驗證管理員密碼
+  // 驗證管理員密碼（一定會執行）
   if(!await checkAdmin())return;
   const data={p:products,c:combos,cl:clients,ev:events,savedAt:new Date().toISOString()};
   const content='// 淨淨報價系統 - 資料儲存檔\n// 此檔案由系統自動產生，請勿手動修改\n// 最後更新：'+new Date().toLocaleString('zh-TW')+'\nwindow.JJ_DATA = '+JSON.stringify(data,null,2)+';\n';
