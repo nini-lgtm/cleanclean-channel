@@ -738,6 +738,12 @@ const filteredCl=useMemo(()=>clients.filter(c=>{
   if(clQ&&!c.name.toLowerCase().includes(clQ.toLowerCase()))return false;
   return true;
 }),[clients,tierF,clQ]);
+// 類型/搜尋變動時，若目前選的客戶不在過濾結果內，自動切到第一個
+useEffect(()=>{
+  if(filteredCl.length>0 && !filteredCl.find(c=>c.id===cid)){
+    setCid(filteredCl[0].id);
+  }
+},[tierF,clQ,filteredCl]);
 const[evComm,setEvComm]=useState(null);
 
 const cl=clients.find(c=>c.id===cid);
