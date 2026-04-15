@@ -1162,6 +1162,7 @@ function DetailModal({detail,setDetail,dlD,events,sE}){
 const[rows,setRows]=useState(()=>detail.rows.map(r=>({...r,calc:{...r.calc}})));
 const[ship,setShip]=useState(detail.shipping||0);
 const[comm,setComm]=useState(detail.commission||0);
+const[liveRate,setLiveRate]=useState(detail.liveRate||1);
 
 const upRow=(i,field,val)=>{
   setRows(rows.map((r,j)=>{
@@ -1170,15 +1171,33 @@ const upRow=(i,field,val)=>{
     nr.calc[field]=val;
     // recalc row profits
     const c=nr.calc;
+    if(field==='unitCost'){c.totalCost=(val||0)*(nr.qty||0);}
     c.vendorProfit=(c.lp||0)-(c.cp||0);
     c.vendorMargin=c.lp>0?c.vendorProfit/c.lp:0;
     c.netRevenue=(c.cp||0)*(nr.qty||0);
-    c.totalCost=(c.unitCost||(c.totalCost/(nr.qty||1)))*(nr.qty||0);
+    if(field!=='unitCost'){
+      const uc=c.unitCost||(c.totalCost/(nr.qty||1));
+      c.unitCost=uc;
+      c.totalCost=uc*(nr.qty||0);
+    }
     const commAmt=comm>0?c.netRevenue*comm:0;
     c.commAmt=commAmt;
     c.netProfit=c.netRevenue-c.totalCost-commAmt;
     c.netMargin=c.netRevenue>0?c.netProfit/c.netRevenue:0;
     return nr;
+  }));
+};
+
+const upLiveRate=(nr)=>{
+  setLiveRate(nr);
+  setRows(rows.map(r=>{
+    const c={...r.calc};
+    const baseLp=c.baseLp||c.lp||0;
+    c.baseLp=baseLp;
+    c.lp=Math.round(baseLp*nr);
+    c.vendorProfit=c.lp-(c.cp||0);
+    c.vendorMargin=c.lp>0?c.vendorProfit/c.lp:0;
+    return{...r,calc:c};
   }));
 };
 
@@ -1207,7 +1226,7 @@ const totals=useMemo(()=>{
 },[rows,ship,comm]);
 
 const saveDetail=()=>{
-  const updated={...detail,rows,shipping:ship,commission:comm,
+  const updated={...detail,rows,shipping:ship,commission:comm,liveRate,
     totalRevenue:totals.rev,totalCost:totals.totalCost,totalProfit:totals.profit,totalMargin:totals.margin};
   sE(events.map(e=>e.id===detail.id?updated:e));
   setDetail(null);
@@ -1227,6 +1246,9 @@ return(<div className="mo" onClick={()=>setDetail(null)}>
 <div style={{display:'flex',gap:12,marginBottom:16,flexWrap:'wrap'}}>
 <F l="運費（實際）"><input type="number" value={ship} onChange={e=>setShip(+e.target.value)} style={{width:120}}/></F>
 <F l="分潤比例"><input type="number" step=".01" value={comm} onChange={e=>setComm(+e.target.value)} style={{width:100}}/></F>
+<F l="直播折數"><select value={liveRate} onChange={e=>upLiveRate(+e.target.value)} style={{width:110}}>
+<option value={1}>不打折</option><option value={0.95}>95折</option><option value={0.9}>9折</option><option value={0.85}>85折</option><option value={0.8}>8折</option><option value={0.75}>75折</option><option value={0.7}>7折</option><option value={0.65}>65折</option><option value={0.6}>6折</option><option value={0.55}>55折</option><option value={0.5}>5折</option>
+</select></F>
 </div>
 
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
@@ -1240,7 +1262,7 @@ return(<div className="mo" onClick={()=>setDetail(null)}>
 <th>品項</th><th style={{background:'#fffbeb'}}>組數</th><th>官網價</th>
 <th style={{background:'#fffbeb'}}>直播價</th><th style={{background:'#fffbeb'}}>進貨價</th>
 <th style={{background:'#e6f7fa'}}>廠商利潤</th><th style={{background:'#e6f7fa'}}>廠商毛利</th>
-<th>淨淨營業額</th><th>淨淨成本</th><th>淨淨利潤</th><th>毛利率</th>
+<th>淨淨營業額</th><th style={{background:'#fffbeb'}}>單位成本</th><th>淨淨成本</th><th>淨淨利潤</th><th>毛利率</th>
 </tr></thead><tbody>
 {rows.map((r,i)=>{const c=r.calc||{};return(
 <tr key={i}>
@@ -1251,7 +1273,9 @@ return(<div className="mo" onClick={()=>setDetail(null)}>
 <td style={{background:'#fffbeb'}}><input type="number" value={Math.round(c.cp||0)} onChange={e=>upRow(i,'cp',+e.target.value)} style={{width:70,padding:'2px 4px',fontSize:13}}/></td>
 <td style={{background:'#f8fafc',color:c.vendorProfit>=0?'#059669':'#dc2626'}}>${$(c.vendorProfit)}</td>
 <td style={{background:'#f8fafc'}}><span className={C(c.vendorMargin)}>{P(c.vendorMargin)}</span></td>
-<td>${$(c.netRevenue)}</td><td>${$(c.totalCost)}</td>
+<td>${$(c.netRevenue)}</td>
+<td style={{background:'#fffbeb'}}><input type="number" value={Math.round(c.unitCost||(c.totalCost/(r.qty||1))||0)} onChange={e=>upRow(i,'unitCost',+e.target.value)} style={{width:70,padding:'2px 4px',fontSize:13}}/></td>
+<td>${$(c.totalCost)}</td>
 <td style={{fontWeight:600,color:c.netProfit>=0?'#059669':'#dc2626'}}>${$(c.netProfit)}</td>
 <td><span className={C(c.netMargin)}>{P(c.netMargin)}</span></td>
 </tr>)})}
