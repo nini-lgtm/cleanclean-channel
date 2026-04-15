@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>淨淨報價管理系統</title>
 <script src="./data.js" onerror="window.JJ_DATA=null"></script>
+<script src="./master.js" onerror="window.JJ_MASTER=null"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
@@ -397,7 +399,7 @@ const CL0=[
 {id:2,name:'Mei姊',commission:.32,note:'32%分潤'},
 ];
 
-const TABS=['產品主表','組合設定','報價試算','數據分析','場次總表'];
+const TABS=['🌟 客戶儀表板','👥 客戶主檔','📦 產品主檔','📊 銷售分析','產品主表','組合設定','報價試算','數據分析','場次總表'];
 
 function App(){
 const[tab,setTab]=useState(0);
@@ -583,6 +585,46 @@ useEffect(()=>{
   return()=>clearInterval(id);
 },[]);
 
+/* 下載完整 ZIP 備份（純檔備份） */
+const backupZip=async()=>{
+  if(typeof JSZip==='undefined'){alert('JSZip 尚未載入，請檢查網路');return;}
+  const zip=new JSZip();
+  const data={p:products,c:combos,cl:clients,ev:events,savedAt:new Date().toISOString()};
+  const dataContent='// 淨淨報價系統 - 資料儲存檔\n// 備份時間：'+new Date().toLocaleString('zh-TW')+'\nwindow.JJ_DATA = '+JSON.stringify(data,null,2)+';\n';
+  zip.file('data.js',dataContent);
+  // 若有 master.js 也一起打包
+  try{
+    const r=await fetch('./master.js');
+    if(r.ok){zip.file('master.js',await r.text());}
+  }catch(e){}
+  zip.file('README.txt','淨淨經營管理系統 備份檔\n備份時間：'+new Date().toLocaleString('zh-TW')+'\n\n還原方式：\n1. 把 data.js 和 master.js 放回報價單資料夾\n2. 或在系統中點「從 ZIP 還原」選此檔\n');
+  const blob=await zip.generateAsync({type:'blob'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='淨淨備份_'+new Date().toISOString().slice(0,10)+'.zip';a.click();
+  URL.revokeObjectURL(a.href);
+};
+/* 從 ZIP 還原 */
+const restoreZip=async()=>{
+  if(!await checkAdmin())return;
+  if(typeof JSZip==='undefined'){alert('JSZip 尚未載入');return;}
+  const input=document.createElement('input');input.type='file';input.accept='.zip';
+  input.onchange=async e=>{
+    const f=e.target.files[0];if(!f)return;
+    try{
+      const zip=await JSZip.loadAsync(f);
+      const dataFile=zip.file('data.js');
+      if(!dataFile){alert('ZIP 中找不到 data.js');return;}
+      const txt=await dataFile.async('string');
+      const m=txt.match(/window\.JJ_DATA\s*=\s*(\{[\s\S]*\});/);
+      if(!m){alert('data.js 格式錯誤');return;}
+      const d=JSON.parse(m[1]);
+      if(!confirm(`將還原：\n場次 ${(d.ev||[]).length} 筆\n客戶 ${(d.cl||[]).length} 筆\n產品 ${(d.p||[]).length} 筆\n\n本機資料會被取代，繼續嗎？`))return;
+      if(d.p)sP(d.p);if(d.c)sC(d.c);if(d.cl)sCl(d.cl);if(d.ev)sE(d.ev);
+      alert('✅ 還原完成！請按「儲存資料」推送到雲端。');
+    }catch(err){alert('還原失敗：'+err.message)}
+  };
+  input.click();
+};
 /* 匯出 JSON 備份 */
 const exportData=()=>{
   const data={p:products,c:combos,cl:clients,ev:events,exportDate:new Date().toISOString()};
@@ -622,6 +664,8 @@ return(<div style={{minHeight:'100vh'}}>
 <button onClick={syncFromCloud} style={{background:'#0ea5e9',color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontSize:13,fontWeight:600}}>&#9729;&#65039; 從雲端同步</button>
 {syncStatus&&<span style={{fontSize:12,color:'#64748b',marginRight:8,padding:'4px 10px',background:'#f1f5f9',borderRadius:12}}>{syncStatus}</span>}
 <button onClick={saveToFile} style={{background:'#10b981',color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontSize:13,fontWeight:600}}>&#128190; 儲存資料</button>
+<button onClick={backupZip} style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'6px 14px',cursor:'pointer',fontSize:13}}>&#128230; ZIP 備份</button>
+<button onClick={restoreZip} style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'6px 14px',cursor:'pointer',fontSize:13}}>&#128228; ZIP 還原</button>
 <button onClick={importData} style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'6px 14px',cursor:'pointer',fontSize:13}}>&#128194; 匯入資料</button>
 </div>
 </div></header>
@@ -635,11 +679,15 @@ return(<div style={{minHeight:'100vh'}}>
 <div style={{fontWeight:600,color:'#92400e',marginBottom:2}}>尚未載入您的資料</div>
 <div style={{fontSize:13,color:'#78350f'}}>如果您之前有匯出過資料，請點右上角「匯入資料」載入。首次使用請先設定產品和客戶，完成後點「儲存資料」。</div>
 </div></div>}
-{tab===0&&<T1 products={products} sP={sP}/>}
-{tab===1&&<T2 combos={combos} sC={sC} products={products}/>}
-{tab===2&&<T3 products={products} combos={combos} clients={clients} sCl={sCl} events={events} sE={sE}/>}
-{tab===3&&<T4 products={products} combos={combos} events={events} clients={clients}/>}
-{tab===4&&<T5 events={events} sE={sE} products={products} combos={combos}/>}
+{tab===0&&<CustomerDashboard/>}
+{tab===1&&<MasterClients/>}
+{tab===2&&<MasterProducts/>}
+{tab===3&&<SalesAnalytics/>}
+{tab===4&&<T1 products={products} sP={sP}/>}
+{tab===5&&<T2 combos={combos} sC={sC} products={products}/>}
+{tab===6&&<T3 products={products} combos={combos} clients={clients} sCl={sCl} events={events} sE={sE}/>}
+{tab===7&&<T4 products={products} combos={combos} events={events} clients={clients}/>}
+{tab===8&&<T5 events={events} sE={sE} products={products} combos={combos}/>}
 </main>
 </div>);
 }
@@ -650,6 +698,223 @@ return(<div className="mo" onClick={onClose}><div className="mc" style={{maxWidt
 <h3 style={{fontSize:18,fontWeight:600,marginBottom:16}}>{title}</h3>
 {typeof children==='function'?children(onClose):children}
 </div></div>);
+}
+
+/* ==================== 新：載入主檔 ==================== */
+const M = window.JJ_MASTER || {products:[],clients:[],salesByClient:{},salesByProduct:{},salesByMonth:{},salesBySales:{},salesByCat:{},recentSales:[],totalTxns:0};
+
+/* ==================== 🌟 客戶儀表板 ==================== */
+function CustomerDashboard(){
+  const allClients = M.clients||[];
+  const[code,setCode]=useState(allClients[0]?.code||'');
+  const[q,setQ]=useState('');
+  const[tierF,setTierF]=useState('all');
+
+  const filtered = useMemo(()=>allClients.filter(c=>{
+    if(tierF!=='all'&&c.tier!==tierF)return false;
+    if(q&&!c.name.includes(q)&&!c.code.includes(q))return false;
+    return true;
+  }),[q,tierF]);
+
+  const cli = allClients.find(c=>c.code===code);
+  const s = M.salesByClient[code];
+
+  if(!M.clients||M.clients.length===0){
+    return <div className="card" style={{padding:40,textAlign:'center',color:'#94a3b8'}}>
+      <p style={{fontSize:16}}>尚未載入客戶主檔</p>
+      <p style={{fontSize:13,marginTop:8}}>請確認 master.js 已部署</p>
+    </div>;
+  }
+
+  return(<div>
+    <h2 style={{fontSize:18,fontWeight:600,marginBottom:16}}>🌟 客戶儀表板</h2>
+    <div className="card" style={{padding:16,marginBottom:16}}>
+      <div style={{display:'flex',gap:12,alignItems:'flex-end',flexWrap:'wrap'}}>
+        <F l="類型"><select value={tierF} onChange={e=>setTierF(e.target.value)} style={{minWidth:100}}>
+          <option value="all">全部</option>
+          <option value="dp">經銷商</option>
+          <option value="cp">特約商</option>
+          <option value="live">直播主</option>
+          <option value="sp">阿清</option>
+          <option value="gp">團購主</option>
+        </select></F>
+        <F l="搜尋"><input type="text" value={q} onChange={e=>setQ(e.target.value)} placeholder="客戶名稱或代號" style={{width:180}}/></F>
+        <F l={`選擇客戶（${filtered.length}）`}>
+          <select value={code} onChange={e=>setCode(e.target.value)} style={{minWidth:250}}>
+            {filtered.map(c=>{
+              const ss=M.salesByClient[c.code];
+              const label = c.code+' '+c.name+(ss?` · $${Math.round(ss.t).toLocaleString()}`:'');
+              return <option key={c.code} value={c.code}>{label}</option>;
+            })}
+          </select>
+        </F>
+      </div>
+    </div>
+
+    {cli&&<>
+      <div className="card" style={{padding:16,marginBottom:16,background:'linear-gradient(135deg,#1A6A75,#2a8a95)',color:'#fff'}}>
+        <div style={{fontSize:12,opacity:.8}}>{cli.code} · {cli.sales}</div>
+        <div style={{fontSize:24,fontWeight:700,marginTop:4}}>{cli.name}</div>
+        {s&&<div style={{fontSize:12,opacity:.85,marginTop:6}}>首次交易 {s.fd} ｜ 最近交易 {s.ld} ｜ 共 {s.o} 張訂單</div>}
+      </div>
+
+      {!s&&<div className="card" style={{padding:40,textAlign:'center',color:'#94a3b8'}}>此客戶尚無交易紀錄</div>}
+
+      {s&&<>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
+          <div className="sc s1"><div style={{fontSize:12,opacity:.9}}>累計營業額</div><div style={{fontSize:22,fontWeight:700}}>${Math.round(s.t).toLocaleString()}</div></div>
+          <div className="sc s2"><div style={{fontSize:12,opacity:.9}}>累計毛利</div><div style={{fontSize:22,fontWeight:700}}>${Math.round(s.p).toLocaleString()}</div></div>
+          <div className="sc s3"><div style={{fontSize:12,opacity:.9}}>平均毛利率</div><div style={{fontSize:22,fontWeight:700}}>{s.mg}%</div></div>
+          <div className="sc s4"><div style={{fontSize:12,opacity:.9}}>總數量</div><div style={{fontSize:22,fontWeight:700}}>{s.q.toLocaleString()}</div></div>
+        </div>
+
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+          <div className="card" style={{padding:16}}>
+            <h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>🏆 Top 10 熱賣產品</h3>
+            <table style={{fontSize:12}}><thead><tr><th>產品</th><th style={{textAlign:'right'}}>數量</th><th style={{textAlign:'right'}}>營業額</th><th style={{textAlign:'right'}}>毛利</th></tr></thead>
+            <tbody>{s.tp.map((p,i)=><tr key={i}><td>{p[0]}</td><td style={{textAlign:'right'}}>{p[3]}</td><td style={{textAlign:'right'}}>${Math.round(p[1]).toLocaleString()}</td><td style={{textAlign:'right',color:p[2]>=0?'#059669':'#dc2626'}}>${Math.round(p[2]).toLocaleString()}</td></tr>)}</tbody></table>
+          </div>
+          <div className="card" style={{padding:16}}>
+            <h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>📅 月度銷售</h3>
+            <div style={{maxHeight:280,overflow:'auto'}}>
+            <table style={{fontSize:12}}><thead><tr><th>月份</th><th style={{textAlign:'right'}}>營業額</th><th style={{textAlign:'right'}}>毛利</th><th style={{textAlign:'right'}}>毛利率</th></tr></thead>
+            <tbody>{Object.entries(s.mo).reverse().map(([ym,v])=>{const mg=v[0]>0?(v[1]/v[0]*100).toFixed(1):'0';return <tr key={ym}><td>{ym}</td><td style={{textAlign:'right'}}>${Math.round(v[0]).toLocaleString()}</td><td style={{textAlign:'right',color:v[1]>=0?'#059669':'#dc2626'}}>${Math.round(v[1]).toLocaleString()}</td><td style={{textAlign:'right'}}>{mg}%</td></tr>})}</tbody></table>
+            </div>
+          </div>
+        </div>
+      </>}
+    </>}
+  </div>);
+}
+
+/* ==================== 👥 客戶主檔 ==================== */
+function MasterClients(){
+  const all = M.clients||[];
+  const[q,setQ]=useState('');
+  const[tierF,setTierF]=useState('all');
+  const[sort,setSort]=useState('total');
+
+  const rows = useMemo(()=>{
+    let list = all.filter(c=>{
+      if(tierF!=='all'&&c.tier!==tierF)return false;
+      if(q&&!c.name.includes(q)&&!c.code.includes(q))return false;
+      return true;
+    }).map(c=>({...c, ...M.salesByClient[c.code]||{t:0,p:0,mg:0,o:0}}));
+    if(sort==='total')list.sort((a,b)=>(b.t||0)-(a.t||0));
+    else if(sort==='profit')list.sort((a,b)=>(b.p||0)-(a.p||0));
+    else if(sort==='margin')list.sort((a,b)=>(b.mg||0)-(a.mg||0));
+    else if(sort==='name')list.sort((a,b)=>a.name.localeCompare(b.name));
+    return list;
+  },[q,tierF,sort]);
+
+  const tot = rows.reduce((a,r)=>({t:a.t+(r.t||0),p:a.p+(r.p||0),o:a.o+(r.o||0)}),{t:0,p:0,o:0});
+
+  return(<div>
+    <h2 style={{fontSize:18,fontWeight:600,marginBottom:16}}>👥 客戶主檔（{all.length} 筆）</h2>
+    <div className="card" style={{padding:16,marginBottom:16}}>
+      <div style={{display:'flex',gap:12,alignItems:'flex-end',flexWrap:'wrap'}}>
+        <F l="類型"><select value={tierF} onChange={e=>setTierF(e.target.value)}>
+          <option value="all">全部</option><option value="dp">經銷商</option><option value="cp">特約商</option><option value="live">直播主</option><option value="sp">阿清</option><option value="gp">團購主</option>
+        </select></F>
+        <F l="搜尋"><input type="text" value={q} onChange={e=>setQ(e.target.value)} placeholder="客戶名稱或代號" style={{width:200}}/></F>
+        <F l="排序"><select value={sort} onChange={e=>setSort(e.target.value)}>
+          <option value="total">營業額</option><option value="profit">毛利</option><option value="margin">毛利率</option><option value="name">名稱</option>
+        </select></F>
+      </div>
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
+      <div className="sc s1"><div style={{fontSize:12,opacity:.9}}>篩選客戶</div><div style={{fontSize:22,fontWeight:700}}>{rows.length}</div></div>
+      <div className="sc s2"><div style={{fontSize:12,opacity:.9}}>累計營業額</div><div style={{fontSize:22,fontWeight:700}}>${Math.round(tot.t).toLocaleString()}</div></div>
+      <div className="sc s3"><div style={{fontSize:12,opacity:.9}}>累計毛利</div><div style={{fontSize:22,fontWeight:700}}>${Math.round(tot.p).toLocaleString()}</div></div>
+      <div className="sc s4"><div style={{fontSize:12,opacity:.9}}>累計訂單</div><div style={{fontSize:22,fontWeight:700}}>{tot.o}</div></div>
+    </div>
+    <div className="card" style={{overflow:'auto',maxHeight:600}}>
+      <table><thead><tr><th>代號</th><th>客戶</th><th>業務員</th><th style={{textAlign:'right'}}>訂單</th><th style={{textAlign:'right'}}>營業額</th><th style={{textAlign:'right'}}>毛利</th><th style={{textAlign:'right'}}>毛利率</th><th>最近交易</th></tr></thead>
+      <tbody>{rows.map(c=><tr key={c.code}><td style={{fontSize:11,color:'#64748b'}}>{c.code}</td><td style={{fontWeight:500}}>{c.name}</td><td><span className="tag tbl">{c.sales}</span></td><td style={{textAlign:'right'}}>{c.o||0}</td><td style={{textAlign:'right'}}>${Math.round(c.t||0).toLocaleString()}</td><td style={{textAlign:'right',color:(c.p||0)>=0?'#059669':'#dc2626'}}>${Math.round(c.p||0).toLocaleString()}</td><td style={{textAlign:'right'}}><span className={C((c.mg||0)/100)}>{c.mg||0}%</span></td><td style={{fontSize:11}}>{c.ld||'-'}</td></tr>)}</tbody></table>
+    </div>
+  </div>);
+}
+
+/* ==================== 📦 產品主檔 ==================== */
+function MasterProducts(){
+  const all = M.products||[];
+  const[q,setQ]=useState('');
+  const[cat1F,setCat1F]=useState('all');
+  const[cat2F,setCat2F]=useState('all');
+
+  const cat1Opts = useMemo(()=>['all',...new Set(all.map(p=>p.cat1).filter(Boolean))],[]);
+  const cat2Opts = useMemo(()=>['all',...new Set(all.filter(p=>cat1F==='all'||p.cat1===cat1F).map(p=>p.cat2).filter(Boolean))],[cat1F]);
+
+  const rows = useMemo(()=>all.filter(p=>{
+    if(cat1F!=='all'&&p.cat1!==cat1F)return false;
+    if(cat2F!=='all'&&p.cat2!==cat2F)return false;
+    if(q&&!p.name.includes(q)&&!p.id.includes(q))return false;
+    return true;
+  }).map(p=>({...p, sale:M.salesByProduct[p.name]||{t:0,p:0,q:0,mg:0}})),[q,cat1F,cat2F]);
+
+  return(<div>
+    <h2 style={{fontSize:18,fontWeight:600,marginBottom:16}}>📦 產品主檔（{all.length} 筆）</h2>
+    <div className="card" style={{padding:16,marginBottom:16}}>
+      <div style={{display:'flex',gap:12,alignItems:'flex-end',flexWrap:'wrap'}}>
+        <F l="大類"><select value={cat1F} onChange={e=>{setCat1F(e.target.value);setCat2F('all');}}>
+          {cat1Opts.map(c=><option key={c} value={c}>{c==='all'?'全部':c}</option>)}
+        </select></F>
+        <F l="中類"><select value={cat2F} onChange={e=>setCat2F(e.target.value)}>
+          {cat2Opts.map(c=><option key={c} value={c}>{c==='all'?'全部':c}</option>)}
+        </select></F>
+        <F l="搜尋"><input type="text" value={q} onChange={e=>setQ(e.target.value)} placeholder="產品名稱或代號" style={{width:200}}/></F>
+      </div>
+    </div>
+    <div className="card" style={{overflow:'auto',maxHeight:650}}>
+      <table style={{fontSize:12}}><thead><tr><th>代號</th><th>產品名稱</th><th>大類</th><th>中類</th><th>小類</th><th>供應商</th><th style={{textAlign:'right'}}>平均成本</th><th style={{textAlign:'right'}}>庫存</th><th style={{textAlign:'right'}}>累計銷量</th><th style={{textAlign:'right'}}>累計營業額</th><th style={{textAlign:'right'}}>毛利率</th></tr></thead>
+      <tbody>{rows.map(p=><tr key={p.id}><td style={{fontSize:11,color:'#64748b'}}>{p.id}</td><td style={{fontWeight:500}}>{p.name}</td><td>{p.cat1}</td><td>{p.cat2}</td><td>{p.cat3}</td><td style={{fontSize:11}}>{p.vendor}</td><td style={{textAlign:'right'}}>${p.avgCost}</td><td style={{textAlign:'right',color:p.stock<100?'#dc2626':'#059669'}}>{p.stock.toLocaleString()}</td><td style={{textAlign:'right'}}>{p.sale.q.toLocaleString()}</td><td style={{textAlign:'right'}}>${Math.round(p.sale.t).toLocaleString()}</td><td style={{textAlign:'right'}}>{p.sale.mg}%</td></tr>)}</tbody></table>
+    </div>
+  </div>);
+}
+
+/* ==================== 📊 銷售分析 ==================== */
+function SalesAnalytics(){
+  const months = M.salesByMonth||{};
+  const cats = M.salesByCat||{};
+  const salesByPerson = M.salesBySales||{};
+  const[yearF,setYearF]=useState('all');
+
+  const years = ['all',...new Set(Object.keys(months).map(ym=>ym.slice(0,4)))].sort();
+  const monthEntries = Object.entries(months).filter(([ym])=>yearF==='all'||ym.startsWith(yearF)).sort(([a],[b])=>b.localeCompare(a));
+  const tot = monthEntries.reduce((a,[,v])=>({r:a.r+v.r,p:a.p+v.p,q:a.q+v.q}),{r:0,p:0,q:0});
+  const avgMg = tot.r>0?(tot.p/tot.r*100).toFixed(2):0;
+
+  return(<div>
+    <h2 style={{fontSize:18,fontWeight:600,marginBottom:16}}>📊 銷售分析（累計 {M.totalTxns?.toLocaleString()} 筆交易）</h2>
+    <div className="card" style={{padding:16,marginBottom:16}}>
+      <F l="年度"><select value={yearF} onChange={e=>setYearF(e.target.value)}>
+        {years.map(y=><option key={y} value={y}>{y==='all'?'全部':y}</option>)}
+      </select></F>
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
+      <div className="sc s1"><div style={{fontSize:12,opacity:.9}}>累計營業額</div><div style={{fontSize:22,fontWeight:700}}>${Math.round(tot.r).toLocaleString()}</div></div>
+      <div className="sc s2"><div style={{fontSize:12,opacity:.9}}>累計毛利</div><div style={{fontSize:22,fontWeight:700}}>${Math.round(tot.p).toLocaleString()}</div></div>
+      <div className="sc s3"><div style={{fontSize:12,opacity:.9}}>平均毛利率</div><div style={{fontSize:22,fontWeight:700}}>{avgMg}%</div></div>
+      <div className="sc s4"><div style={{fontSize:12,opacity:.9}}>總數量</div><div style={{fontSize:22,fontWeight:700}}>{tot.q.toLocaleString()}</div></div>
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+      <div className="card" style={{padding:16}}>
+        <h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>📅 月度走勢</h3>
+        <div style={{maxHeight:400,overflow:'auto'}}>
+          <table style={{fontSize:12}}><thead><tr><th>月份</th><th style={{textAlign:'right'}}>營業額</th><th style={{textAlign:'right'}}>毛利</th><th style={{textAlign:'right'}}>毛利率</th><th style={{textAlign:'right'}}>客戶數</th></tr></thead>
+          <tbody>{monthEntries.map(([ym,v])=><tr key={ym}><td>{ym}</td><td style={{textAlign:'right'}}>${Math.round(v.r).toLocaleString()}</td><td style={{textAlign:'right',color:v.p>=0?'#059669':'#dc2626'}}>${Math.round(v.p).toLocaleString()}</td><td style={{textAlign:'right'}}>{v.mg}%</td><td style={{textAlign:'right'}}>{v.cn}</td></tr>)}</tbody></table>
+        </div>
+      </div>
+      <div className="card" style={{padding:16}}>
+        <h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>🏷️ 大類分析</h3>
+        <table style={{fontSize:12}}><thead><tr><th>大類</th><th style={{textAlign:'right'}}>營業額</th><th style={{textAlign:'right'}}>毛利</th><th style={{textAlign:'right'}}>毛利率</th></tr></thead>
+        <tbody>{Object.entries(cats).sort(([,a],[,b])=>b.r-a.r).map(([c,v])=><tr key={c}><td>{c}</td><td style={{textAlign:'right'}}>${Math.round(v.r).toLocaleString()}</td><td style={{textAlign:'right',color:v.p>=0?'#059669':'#dc2626'}}>${Math.round(v.p).toLocaleString()}</td><td style={{textAlign:'right'}}>{v.mg}%</td></tr>)}</tbody></table>
+        <h3 style={{fontSize:14,fontWeight:600,marginTop:16,marginBottom:12}}>👤 業務員業績</h3>
+        <table style={{fontSize:12}}><thead><tr><th>業務員</th><th style={{textAlign:'right'}}>累計營業額</th><th style={{textAlign:'right'}}>累計毛利</th></tr></thead>
+        <tbody>{Object.entries(salesByPerson).map(([s,months])=>{const r=Object.values(months).reduce((a,x)=>a+x[0],0);const p=Object.values(months).reduce((a,x)=>a+x[1],0);return[s,r,p]}).sort((a,b)=>b[1]-a[1]).map(([s,r,p])=><tr key={s}><td>{s}</td><td style={{textAlign:'right'}}>${Math.round(r).toLocaleString()}</td><td style={{textAlign:'right',color:p>=0?'#059669':'#dc2626'}}>${Math.round(p).toLocaleString()}</td></tr>)}</tbody></table>
+      </div>
+    </div>
+  </div>);
 }
 
 /* ==================== 1. 產品主表 ==================== */
