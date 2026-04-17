@@ -347,13 +347,13 @@ async function checkAdmin(){
 }
 // GitHub API 直接存檔（網頁版自動部署）
 // Token 存在 localStorage，不寫在原始碼中（安全）
-const _GH={user:'nini-lgtm',repo:'cleanclean-hub',branch:'main'};
+const _GH={user:'nini-lgtm',repo:'cleanclean-channel',branch:'master'};
 function getGHToken(){return localStorage.getItem('jj_gh_token')||'';}
 function setGHToken(t){localStorage.setItem('jj_gh_token',t);}
 // 從雲端拉最新資料（用於合併）
 async function fetchCloudData(){
   try{
-    const url='https://raw.githubusercontent.com/nini-lgtm/cleanclean-hub/main/data.js?t='+Date.now();
+    const url='https://raw.githubusercontent.com/nini-lgtm/cleanclean-channel/master/data.js?t='+Date.now();
     const r=await fetch(url);
     if(!r.ok)return null;
     const txt=await r.text();
@@ -380,13 +380,13 @@ function mergeData(local,cloud){
 async function saveToGitHub(content){
   let token=getGHToken();
   if(!token){
-    token=prompt('首次使用 GitHub 自動部署，請輸入 GitHub Personal Access Token：\n\n（到 GitHub → Settings → Developer settings →\nFine-grained tokens 建立，\n只需給 cleanclean-hub repo 的 Contents 讀寫權限）');
+    token=prompt('首次使用 GitHub 自動部署，請輸入 GitHub Personal Access Token：\n\n（到 GitHub → Settings → Developer settings →\nFine-grained tokens 建立，\n只需給 cleanclean-channel repo 的 Contents 讀寫權限）');
     if(!token)throw new Error('未輸入 Token，取消部署');
     setGHToken(token);
   }
   const api='https://api.github.com';
   const path='data.js';
-  const headers={'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json','User-Agent':'cleanclean-hub-deploy'};
+  const headers={'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json','User-Agent':'cleanclean-channel'};
   let sha=null;
   try{
     const r=await fetch(api+'/repos/'+_GH.user+'/'+_GH.repo+'/contents/'+path+'?ref='+_GH.branch,{headers});
@@ -489,7 +489,7 @@ useEffect(()=>{
 const syncFromCloud=async()=>{
   if(!confirm('將從雲端載入最新資料，本機未儲存的變更會遺失。確定繼續？'))return;
   try{
-    const url='https://raw.githubusercontent.com/nini-lgtm/cleanclean-hub/main/data.js?t='+Date.now();
+    const url='https://raw.githubusercontent.com/nini-lgtm/cleanclean-channel/master/data.js?t='+Date.now();
     const r=await fetch(url);
     if(!r.ok)throw new Error('HTTP '+r.status);
     const txt=await r.text();
@@ -1606,7 +1606,7 @@ return(<div>
 <button className="bp" onClick={()=>setSa(true)}>+ 新增產品</button>
 </div>
 <div className="card" style={{overflow:'auto'}}><table><thead><tr>
-<th>分類</th><th>產品名稱</th><th>定價</th><th>零售價</th><th style={{background:curTier.bg}}>{curTier.label}價</th><th>成本</th><th style={{background:curTier.bg}}>{curTier.label}毛利率</th><th>操作</th>
+<th>分類</th><th>產品名稱</th><th>官網價</th><th>零售價</th><th style={{background:curTier.bg}}>{curTier.label}價</th><th>成本</th><th style={{background:curTier.bg}}>{curTier.label}毛利率</th><th>操作</th>
 </tr></thead><tbody>
 {fl.map(p=>{const price=p[tierView]||0;const mg=price>0?(price-p.cost)/price:0;
 if(eid===p.id)return(<tr key={p.id} style={{background:'#e6f7fa'}}>
@@ -1639,7 +1639,7 @@ return(<div>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
 <F l="分類"><input type="text" value={d.cat} onChange={e=>sD({...d,cat:e.target.value})} style={{width:'100%'}}/></F>
 <F l="產品名稱"><input type="text" value={d.name} onChange={e=>sD({...d,name:e.target.value})} style={{width:'100%'}}/></F>
-<F l="定價"><input type="number" value={d.retail} onChange={e=>sD({...d,retail:+e.target.value})} style={{width:'100%'}}/></F>
+<F l="官網價"><input type="number" value={d.retail} onChange={e=>sD({...d,retail:+e.target.value})} style={{width:'100%'}}/></F>
 <F l="零售價"><input type="number" value={d.rp} onChange={e=>sD({...d,rp:+e.target.value})} style={{width:'100%'}}/></F>
 <F l="經銷價"><input type="number" value={d.dp} onChange={e=>sD({...d,dp:+e.target.value})} style={{width:'100%'}}/></F>
 <F l="特約價"><input type="number" value={d.cp} onChange={e=>sD({...d,cp:+e.target.value})} style={{width:'100%'}}/></F>
