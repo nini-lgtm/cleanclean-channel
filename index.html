@@ -2514,13 +2514,14 @@ return(<div>
 </div>
 
 <div className="card" style={{overflow:'auto'}}><table><thead><tr>
-<th>場次</th><th>廠商</th><th>日期</th><th>營業額</th><th>成本</th><th>運費</th><th>利潤</th><th>毛利率</th><th>操作</th>
+<th>場次</th><th>廠商</th><th>日期</th><th>折數</th><th>營業額</th><th>成本</th><th>運費</th><th>利潤</th><th>毛利率</th><th>操作</th>
 </tr></thead><tbody>
 {fl.map(e=>(
 <tr key={e.id}>
 <td style={{fontWeight:500}}>{e.name}</td>
 <td><span className="tag tbl">{e.client}</span>{e.commission>0&&<span style={{fontSize:11,color:'#d97706',marginLeft:4}}>({(e.commission*100).toFixed(0)}%)</span>}</td>
 <td>{e.date}</td>
+<td style={{textAlign:'center'}}>{e.liveRate!=null&&e.liveRate!==1?<span style={{background:'#fef3c7',color:'#92400e',padding:'2px 6px',borderRadius:4,fontSize:11,fontWeight:600}}>{Math.round(e.liveRate*100)/10}折</span>:<span style={{color:'#94a3b8',fontSize:11}}>原價</span>}</td>
 <td>${$(e.totalRevenue)}</td><td>${$(e.totalCost)}</td><td>${$(e.shipping||0)}</td>
 <td style={{fontWeight:600,color:e.totalProfit>=0?'#059669':'#dc2626'}}>${$(e.totalProfit)}</td>
 <td><span className={C(e.totalMargin)}>{P(e.totalMargin)}</span></td>
