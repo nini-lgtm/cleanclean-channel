@@ -1,6 +1,6 @@
 // 淨淨報價系統 - 資料儲存檔
 // 此檔案由系統自動產生，請勿手動修改
-// 最後更新：2026/4/22 下午12:51:45
+// 最後更新：2026/4/22 下午1:03:23
 window.JJ_DATA = {
   "p": [
     {
@@ -4446,7 +4446,97 @@ window.JJ_DATA = {
           }
         }
       ]
+    },
+    {
+      "id": 1776833722534,
+      "name": "測試",
+      "client": "阿清服飾",
+      "commission": 0,
+      "tier": "sp",
+      "liveRate": 1,
+      "date": "2026-04-22",
+      "year": 2026,
+      "month": 4,
+      "totalRevenue": 31000,
+      "totalCost": 8660,
+      "totalProfit": 22340,
+      "totalMargin": 0.7206451612903226,
+      "shipping": 0,
+      "shipMode": "lump",
+      "rows": [
+        {
+          "type": "s",
+          "pid": 1,
+          "qty": 100,
+          "lp": 0,
+          "clp": false,
+          "cpo": 0,
+          "ccp": false,
+          "calc": {
+            "name": "淨淨剋菌液500ML",
+            "cp": 310,
+            "dCp": 310,
+            "lp": 790,
+            "dLive": 790,
+            "unitCost": 86.6,
+            "retail": 790,
+            "vendorProfit": 480,
+            "vendorMargin": 0.6075949367088608,
+            "netRevenue": 31000,
+            "totalCost": 8660,
+            "netProfit": 22340,
+            "netMargin": 0.7206451612903226,
+            "commAmt": 0,
+            "perShip": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": 1776833727826,
+      "name": "測試",
+      "client": "阿清服飾",
+      "commission": 0,
+      "tier": "sp",
+      "liveRate": 1,
+      "date": "2026-04-22",
+      "year": 2026,
+      "month": 4,
+      "totalRevenue": 31000,
+      "totalCost": 8660,
+      "totalProfit": 22340,
+      "totalMargin": 0.7206451612903226,
+      "shipping": 0,
+      "shipMode": "lump",
+      "rows": [
+        {
+          "type": "s",
+          "pid": 1,
+          "qty": 100,
+          "lp": 0,
+          "clp": false,
+          "cpo": 0,
+          "ccp": false,
+          "calc": {
+            "name": "淨淨剋菌液500ML",
+            "cp": 310,
+            "dCp": 310,
+            "lp": 790,
+            "dLive": 790,
+            "unitCost": 86.6,
+            "retail": 790,
+            "vendorProfit": 480,
+            "vendorMargin": 0.6075949367088608,
+            "netRevenue": 31000,
+            "totalCost": 8660,
+            "netProfit": 22340,
+            "netMargin": 0.7206451612903226,
+            "commAmt": 0,
+            "perShip": 0
+          }
+        }
+      ]
     }
   ],
-  "savedAt": "2026-04-22T04:51:45.870Z"
+  "savedAt": "2026-04-22T05:03:23.230Z"
 };
