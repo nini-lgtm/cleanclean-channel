@@ -9,7 +9,7 @@
 <meta http-equiv="Expires" content="0">
 <script>
 // 版本號 — 每次部署自動更新，用於強制瀏覽器抓最新版
-window._APP_VER = '20260422v1313';
+window._APP_VER = '20260422v1347';
 // 如果 URL 沒帶 v 或版本太舊，加上 cache-bust 重新載入
 (function(){
   if(location.protocol==='file:')return;// 本機不需要
@@ -369,25 +369,37 @@ async function checkAdmin(){
   if(!pw)return false;
   const h=await sha256(pw);
   var _AH='bf56638f3c2a20c7f75ee1d07f0907042a6fe19c867fc9276611a6efcf8fcda8';
-  if(h===_AH){_admin=true;return true;}
+  if(h===_AH){_admin=true;_pwdHash=h;return true;}
   alert('密碼錯誤，無法執行此操作。');
   return false;
 }
-// GitHub API 直接存檔（網頁版自動部署）
-// Token 存在 localStorage，不寫在原始碼中（安全）
-const _GH={user:'nini-lgtm',repo:'cleanclean-channel',branch:'master'};
+// Google Apps Script API（Google Sheet 當資料庫）
+// 全員共用，免 Token；需要管理員密碼才能寫入
+const _API='https://script.google.com/macros/s/AKfycbxJHO_m9zVxmMd_lCXedQljCS2x7c_s0T05g4ejjrcth7oRNxOaKacleFag_w-xIN9nQw/exec';
+// 舊 Token 機制保留給相容（沒用到）
 function getGHToken(){return localStorage.getItem('jj_gh_token')||'';}
 function setGHToken(t){localStorage.setItem('jj_gh_token',t);}
-// 從雲端拉最新資料（用於合併）
+// 正規化日期（Google Sheets 會把 YYYY-MM-DD 自動轉成 Date 物件字串）
+function _normDate(v){
+  if(!v)return '';
+  const s=String(v);
+  if(s.match(/^\d{4}-\d{2}-\d{2}/))return s.slice(0,10);
+  const d=new Date(s);
+  if(isNaN(d))return s;
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+// 從 Google Sheet 拉最新資料
 async function fetchCloudData(){
   try{
-    const url='https://raw.githubusercontent.com/nini-lgtm/cleanclean-channel/master/data.js?t='+Date.now();
+    const url=_API+'?t='+Date.now();
     const r=await fetch(url);
     if(!r.ok)return null;
-    const txt=await r.text();
-    const m=txt.match(/window\.JJ_DATA\s*=\s*(\{[\s\S]*\});/);
-    return m?JSON.parse(m[1]):null;
-  }catch(e){return null}
+    const d=await r.json();
+    if(d.error){console.warn('API error:',d.error);return null;}
+    // 正規化場次日期
+    (d.ev||[]).forEach(e=>{e.date=_normDate(e.date);});
+    return d;
+  }catch(e){console.warn('fetchCloudData',e);return null}
 }
 // 智慧合併：events/clients 用 ID 去重合併（雙方都保留），products/combos 以本機為準
 function mergeData(local,cloud){
@@ -405,37 +417,31 @@ function mergeData(local,cloud){
     savedAt:local.savedAt
   };
 }
+// 存到 Google Sheet (透過 Apps Script)
+// 需傳 pwdHash（管理員密碼的 SHA256）+ payload
+let _pwdHash='';
+async function saveToCloud(data){
+  // 先拿到密碼 hash（已在 checkAdmin 驗證過）
+  if(!_pwdHash){
+    // 從 session 拿或提示輸入
+    const pw=prompt('請輸入管理員密碼：');
+    if(!pw)throw new Error('未輸入密碼');
+    _pwdHash=await sha256(pw);
+  }
+  const body=JSON.stringify({pwdHash:_pwdHash,payload:{p:data.p,c:data.c,cl:data.cl,ev:data.ev}});
+  // 用 text/plain 避免 CORS preflight
+  const r=await fetch(_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body});
+  if(!r.ok)throw new Error('雲端儲存失敗 HTTP '+r.status);
+  const j=await r.json();
+  if(!j.ok){
+    if((j.error||'').includes('password')){_pwdHash='';throw new Error('密碼錯誤，請重新儲存');}
+    throw new Error(j.error||'未知錯誤');
+  }
+  return j;
+}
+// 舊函式保留空殼供其他地方呼叫
 async function saveToGitHub(content){
-  let token=getGHToken();
-  if(!token){
-    token=prompt('首次使用 GitHub 自動部署，請輸入 GitHub Personal Access Token：\n\n（到 GitHub → Settings → Developer settings →\nFine-grained tokens 建立，\n只需給 cleanclean-channel repo 的 Contents 讀寫權限）');
-    if(!token)throw new Error('未輸入 Token，取消部署');
-    setGHToken(token);
-  }
-  const api='https://api.github.com';
-  const path='data.js';
-  const headers={'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json','User-Agent':'cleanclean-channel'};
-  // 最多重試 3 次（處理同時存檔的 SHA 衝突）
-  for(let attempt=0;attempt<3;attempt++){
-    let sha=null;
-    try{
-      const r=await fetch(api+'/repos/'+_GH.user+'/'+_GH.repo+'/contents/'+path+'?ref='+_GH.branch,{headers});
-      if(r.ok){const j=await r.json();sha=j.sha;}
-    }catch(e){}
-    const b64=btoa(unescape(encodeURIComponent(content)));
-    const body={message:'更新報價資料 '+new Date().toLocaleString('zh-TW'),content:b64,branch:_GH.branch};
-    if(sha)body.sha=sha;
-    const r2=await fetch(api+'/repos/'+_GH.user+'/'+_GH.repo+'/contents/'+path,{method:'PUT',headers,body:JSON.stringify(body)});
-    if(r2.ok)return true;
-    if(r2.status===409&&attempt<2){
-      // SHA 衝突 = 同事剛存過，重拉 SHA 重試
-      console.log('SHA conflict (409), retrying... attempt '+(attempt+2));
-      await new Promise(r=>setTimeout(r,500*(attempt+1)));
-      continue;
-    }
-    if(r2.status===401||r2.status===403){localStorage.removeItem('jj_gh_token');throw new Error('Token 無效或過期，請重新儲存時輸入新的 Token');}
-    const t=await r2.text();throw new Error('GitHub API 錯誤 '+r2.status+': '+t);
-  }
+  // content 已不使用，改由 data 參數流程
   return true;
 }
 
@@ -591,24 +597,30 @@ const saveToFile=async()=>{
       _fileHandle=null;
     }
   }
-  // 同步推送到 GitHub Pages
+  // 同步推送到 Google Sheet
   let ghOk=false;
   try{
-    await saveToGitHub(content);
+    // 儲存密碼 hash 用於後續存檔
+    if(!_pwdHash){
+      const pwRaw=prompt('請再輸入一次管理員密碼以完成雲端儲存：');
+      if(pwRaw)_pwdHash=await sha256(pwRaw);
+    }
+    await saveToCloud(data);
     ghOk=true;
   }catch(e){
-    console.warn('GitHub 部署失敗',e);
+    console.warn('雲端儲存失敗',e);
+    alert('❌ 雲端儲存失敗：'+e.message);
   }
   // 結果提示
   if(localOk&&ghOk){
     _unsaved=false;setSaved(true);
-    alert('✅ 儲存完成！\n\n📁 本機 data.js 已更新\n🌐 網頁版已自動部署到 GitHub Pages\n⏳ 約 1-2 分鐘後網頁版生效');
+    alert('✅ 儲存完成！\n\n📁 本機 data.js 已更新\n☁️ 資料已上傳到 Google Sheet\n⚡ 同事下次打開就會看到最新的');
   }else if(ghOk){
     _unsaved=false;setSaved(true);
-    alert('✅ 網頁版已自動部署到 GitHub Pages！\n⏳ 約 1-2 分鐘後生效\n\n（本機檔案未更新，如需本機也更新請重新選擇檔案）');
+    alert('✅ 已上傳到 Google Sheet！\n⚡ 同事下次打開就會看到\n\n（本機檔案未更新，如需本機也更新請重新選擇檔案）');
   }else if(localOk){
     _unsaved=false;setSaved(true);
-    alert('✅ 本機 data.js 已更新！\n\n⚠️ 網頁版部署失敗，請稍後再試或手動執行一鍵部署。');
+    alert('✅ 本機 data.js 已更新！\n\n⚠️ 雲端儲存失敗，請稍後再試。');
   }else{
     // 都失敗，降級為下載
     const blob=new Blob([content],{type:'application/javascript;charset=utf-8'});
@@ -625,8 +637,8 @@ const autoSaveTimer=useRef(null);
 
 // 靜默自動儲存（不跳密碼、不跳 alert；失敗會在畫面上紅色警示）
 const autoSave=async()=>{
-  if(!_admin){setSyncStatus('🔒 未驗管理員，自動儲存停用｜請手動儲存');return;}
-  if(!getGHToken()){setSyncStatus('⚠️ 未設 GitHub Token，資料只存在本機！請按「💾 儲存」設定');return;}
+  if(!_admin){setSyncStatus('🔒 未驗管理員，自動儲存停用｜請手動儲存一次');return;}
+  if(!_pwdHash){setSyncStatus('⚠️ 尚未設定雲端存檔密碼，請手動儲存一次');return;}
   try{
     setSyncStatus('💾 自動儲存中...');
     const cloud=await fetchCloudData();
@@ -638,9 +650,8 @@ const autoSave=async()=>{
       if((merged.cl||[]).length>(clients||[]).length)_sCl(merged.cl);
     }
     const data={p:merged.p,c:merged.c,cl:merged.cl,ev:merged.ev,savedAt:new Date().toISOString()};
-    const content='// 淨淨報價系統 - 資料儲存檔\n// 自動儲存於 '+new Date().toLocaleString('zh-TW')+'\nwindow.JJ_DATA = '+JSON.stringify(data,null,2)+';\n';
     SV_ALL(data);// 同步寫回 localStorage
-    await saveToGitHub(content);
+    await saveToCloud(data);
     _unsaved=false;setSaved(true);
     setSyncStatus('✅ 已自動儲存 '+new Date().toLocaleTimeString('zh-TW').slice(0,5));
     setTimeout(()=>setSyncStatus(s=>s.startsWith('✅')?'':s),5000);
@@ -665,10 +676,10 @@ useEffect(()=>{
   return()=>{if(autoSaveTimer.current)clearTimeout(autoSaveTimer.current)};
 },[products,combos,clients,events]);
 
-// 每 10 秒從雲端抓最新資料，若比本機新則同步更新
+// 從雲端（Google Sheet）抓最新資料：開機馬上跑一次，之後每 5 秒跑一次
 useEffect(()=>{
-  const id=setInterval(async()=>{
-    if(_unsaved)return;// 使用者正在編輯中，跳過
+  const pull=async(isInitial)=>{
+    if(_unsaved&&!isInitial)return;// 編輯中跳過（開機例外）
     try{
       const cloud=await fetchCloudData();
       if(!cloud||!cloud.savedAt)return;
@@ -676,14 +687,17 @@ useEffect(()=>{
       const localObj=localRaw?JSON.parse(localRaw):{};
       const localTime=localObj.savedAt||'';
       if(cloud.savedAt<=localTime)return;// 本機已是最新
-      // 套用雲端資料
       _sP(cloud.p||[]);_sC(cloud.c||[]);
       _sCl(cloud.cl||[]);_sE(cloud.ev||[]);
       localStorage.setItem(SK,JSON.stringify(cloud));
-      setSyncStatus('🔄 已同步同仁更新 '+new Date().toLocaleTimeString('zh-TW').slice(0,5));
-      setTimeout(()=>setSyncStatus(s=>s.startsWith('🔄')?'':s),5000);
+      if(!isInitial){
+        setSyncStatus('🔄 已同步同仁更新 '+new Date().toLocaleTimeString('zh-TW').slice(0,5));
+        setTimeout(()=>setSyncStatus(s=>s.startsWith('🔄')?'':s),5000);
+      }
     }catch(e){}
-  },10000);
+  };
+  pull(true);// 開機立即同步一次
+  const id=setInterval(()=>pull(false),5000);// 之後每 5 秒
   return()=>clearInterval(id);
 },[]);
 
